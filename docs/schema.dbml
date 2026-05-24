@@ -1,0 +1,91 @@
+// Workout Tracker API - Database Schema
+// Brief v1.1
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(255) [unique, not null]
+  password_hash varchar(255) [not null]
+  display_name varchar(100) [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table muscle_groups {
+  id smallint [pk]
+  name varchar(50) [unique, not null]
+  display_order smallint [not null]
+
+  Note: 'Lookup table. Seeded with ~12 entries: chest, back, shoulders, biceps, triceps, forearms, quads, hamstrings, glutes, calves, abs, traps. Not user-editable.'
+}
+
+Table exercises {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(100) [not null]
+  notes text
+  created_by_user_id uuid [ref: > users.id, note: 'NULL = system exercise']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (name, created_by_user_id) [unique, name: 'uq_exercise_name_per_owner']
+  }
+}
+
+Table exercise_muscle_groups {
+  exercise_id uuid [ref: > exercises.id]
+  muscle_group_id smallint [ref: > muscle_groups.id]
+  is_primary boolean [not null, default: false]
+
+  Indexes {
+    (exercise_id, muscle_group_id) [pk]
+  }
+
+  Note: 'Junction table. Application-level rule: exactly one row per exercise_id has is_primary = true.'
+}
+
+Table workouts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [ref: > users.id, not null]
+  name varchar(100) [note: 'e.g. Push A, Leg B']
+  performed_at timestamptz [not null]
+  notes text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (user_id, performed_at) [name: 'idx_workouts_user_performed']
+  }
+}
+
+Table sets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  workout_id uuid [ref: > workouts.id, not null]
+  exercise_id uuid [ref: > exercises.id, not null]
+  set_number smallint [not null, note: 'order within workout, >= 1']
+  weight_kg "numeric(6,2)" [not null, note: '>= 0']
+  reps smallint [not null, note: '>= 1']
+  rpe "numeric(3,1)" [note: 'optional, 1-10']
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (workout_id, set_number) [unique, name: 'uq_set_number_per_workout']
+    (exercise_id, created_at) [name: 'idx_sets_exercise_created']
+  }
+
+  Note: 'estimated_1rm is NOT stored. Computed in API response as weight_kg * (1 + reps / 30).'
+}
+
+Table personal_records {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [ref: > users.id, not null]
+  exercise_id uuid [ref: > exercises.id, not null]
+  set_id uuid [ref: > sets.id, not null]
+  estimated_1rm "numeric(7,2)" [not null, note: 'snapshot at time of PR']
+  achieved_at timestamptz [not null]
+
+  Indexes {
+    (user_id, exercise_id, achieved_at) [name: 'idx_pr_user_exercise_achieved']
+  }
+
+  Note: 'PR history (not current-only). estimated_1rm snapshotted to preserve historical accuracy if source set is later edited.'
+}

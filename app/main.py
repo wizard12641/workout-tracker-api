@@ -2,8 +2,14 @@
 
 Exposes the FastAPI application instance used by uvicorn.
 """
+from fastapi import Depends, FastAPI, status
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
-from fastapi import FastAPI
+from app.api.dependencies import get_db
+
 
 app = FastAPI(
     title="Workout Tracker API",
@@ -15,10 +21,20 @@ app = FastAPI(
 )
 
 @app.get("/health", tags=["health"])
-def health() -> dict[str,str]:
+def health(db: Session = Depends(get_db)) -> JSONResponse:
     """Liveness probe used by the deployment platform.
 
-    Returns a static OK response. A subsequent revision will also verify
-    database connectivity (returns 503 if the DB is unreachable).
+    Returns 200 with database status "ok" when the application can reach
+    Postgres. Returns 503 with "unreachable" if the database query fails.
     """
-    return {"status": "ok"}
+    try:
+        db.execute(text("SELECT 1"))
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "ok", "db": "ok"},
+        )
+    except SQLAlchemyError:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "degraded", "db": "unreachable"},
+        )

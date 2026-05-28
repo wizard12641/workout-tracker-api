@@ -1,24 +1,24 @@
-"""One-off script: verify that the application can connect to Postgres
-and create the users table.
+"""One-off script: verify that the application can connect to Postgres.
 
 Run from the project root with:
-    python scripts/test_connection.py
+    python -m scripts.test_connection
 
-Drops and recreates the users table — DEVELOPMENT ONLY.
+Connects to the database, executes a trivial query, and prints the result.
+Does NOT modify any schema or data. Schema changes are managed by Alembic.
 """
 
-from app.db.base import Base
+
+from sqlalchemy import text
+
 from app.db.session import engine
-from app.models.user import User # noqa: F401
 
 
 def main() -> None:
-    """Test database connection and table creation."""
-    print("Dropping and recreating tables...")
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    print("Done. Inspect with: docker exec -it workout-tracker-db psql -U workout -d workout_tracker -c '\\d users'")
-
+    print("Testing database connection...")
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT version();"))
+        version = result.scalar()
+        print(f"Connected. PostgreSQL version: {version}")
     
 if __name__ == "__main__":
     main()
